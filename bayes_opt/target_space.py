@@ -22,7 +22,7 @@ class TargetSpace(object):
     >>> y = space.register_point(x)
     >>> assert self.max_point()['max_val'] == y
     """
-    def __init__(self, target_func, pbounds, random_state=None):
+    def __init__(self, target_func, pbounds, has_constraint=False, random_state=None):
         """
         Parameters
         ----------
@@ -51,6 +51,9 @@ class TargetSpace(object):
 
         # preallocated memory for X and Y points
         self._params = np.empty(shape=(0, self.dim))
+        self.has_constraint = has_constraint
+        if has_constraint:
+            self._constaint_target = np.empty(shape=(0)) 
         self._target = np.empty(shape=(0))
 
         # keep track of unique points we have seen so far
@@ -164,8 +167,11 @@ class TargetSpace(object):
         self._cache[_hashable(x.ravel())] = target
 
         self._params = np.concatenate([self._params, x.reshape(1, -1)])
-        self._target = np.concatenate([self._target, [target]])
-
+        if self.has_constraint:
+            self._target = np.concatenate([self._target, [target[0]]])
+            self._constaint_target = np.concatenate([self._constaint_target, [target[1]]])
+        else:
+            self._target = np.concatenate([self._target, [target]])
     def probe(self, params):
         """
         Evaulates a single point x, to obtain the value y and then records them

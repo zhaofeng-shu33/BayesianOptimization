@@ -30,7 +30,7 @@ def acq_max(ac, gp, y_max, bounds, random_state, n_warmup=10000, n_iter=10):
         instance of np.RandomState random number generator
 
     :param n_warmup:
-        number of times to randomly sample the aquisition function
+        number of times to randomly sample the acquisition function
 
     :param n_iter:
         number of times to run scipy.minimize
@@ -47,7 +47,7 @@ def acq_max(ac, gp, y_max, bounds, random_state, n_warmup=10000, n_iter=10):
     x_max = x_tries[ys.argmax()]
     max_acq = ys.max()
 
-    # Explore the parameter space more throughly
+    # Explore the parameter space more thoroughly
     x_seeds = random_state.uniform(bounds[:, 0], bounds[:, 1],
                                    size=(n_iter, bounds.shape[0]))
     for x_try in x_seeds:
@@ -135,6 +135,19 @@ class UtilityFunction(object):
         z = (mean - y_max - xi)/std
         return norm.cdf(z)
 
+
+class UtilityFunctionConstraintWrapper(UtilityFunction):
+
+    def __init__(self, constraint_gp, kind, kappa, xi, kappa_decay=1, kappa_decay_delay=0):
+        self.constraint_gp = constraint_gp
+        super(UtilityFunctionConstraintWrapper, self).__init__(kind, kappa, xi, kappa_decay=kappa_decay, kappa_decay_delay=kappa_decay_delay)
+
+    def utility(self, x, gp, y_max):
+        val = super(UtilityFunctionConstraintWrapper, self).utility(x, gp, y_max)
+        mean, std = self.constraint_gp.predict(x, return_std=True)
+        z = -1.0 * mean / std
+        val *= norm.cdf(z)
+        return val
 
 def load_logs(optimizer, logs):
     """Load previous ...

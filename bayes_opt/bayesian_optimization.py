@@ -4,6 +4,7 @@ from .target_space import TargetSpace
 from .event import Events, DEFAULT_EVENTS
 from .logger import _get_default_logger
 from .util import UtilityFunction, acq_max, ensure_rng
+from .util import UtilityFunctionConstraintWrapper
 
 from sklearn.gaussian_process.kernels import Matern
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -71,7 +72,8 @@ class BayesianOptimization(Observable):
     Parameters
     ----------
     f: function
-        Function to be maximized.
+        Function to be maximized, if a single float value is returned.
+        [Function to be maximized, Constrait function <= 0] if a pair of float values are returned
 
     pbounds: dict
         Dictionary with parameters names as keys and a tuple with minimum
@@ -105,9 +107,17 @@ class BayesianOptimization(Observable):
                  bounds_transformer=None):
         self._random_state = ensure_rng(random_state)
 
+        # determine whether f is single-valued
+        f_pargs = {key: val[0] for key, val in pbounds.items()}
+        _ret = f(**f_pargs)
+        if isinstance(_ret, float):
+            self.has_constraint = False
+        else:
+            self.has_constraint = True
         # Data structure containing the function to be optimized, the bounds of
         # its domain, and a record of the evaluations we have done so far
-        self._space = TargetSpace(f, pbounds, random_state)
+
+        self._space = TargetSpace(f, pbounds, has_constraint=self.has_constraint, random_state=random_state)
 
         self._queue = Queue()
 
@@ -119,6 +129,14 @@ class BayesianOptimization(Observable):
             n_restarts_optimizer=5,
             random_state=self._random_state,
         )
+        if self.has_constraint:
+            self._gp_constraint = GaussianProcessRegressor(
+                kernel=Matern(nu=2.5),
+                alpha=1e-6,
+                normalize_y=True,
+                n_restarts_optimizer=5,
+                random_state=self._random_state,
+            )
 
         self._verbose = verbose
         self._bounds_transformer = bounds_transformer
@@ -177,12 +195,13 @@ class BayesianOptimization(Observable):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             self._gp.fit(self._space.params, self._space.target)
-
+            if self.has_constraint:
+                self._gp_constraint.fit(self._space.params, self._space._constaint_target)
         # Finding argmax of the acquisition function.
         suggestion = acq_max(
             ac=utility_function.utility,
             gp=self._gp,
-            y_max=self._space.target.max(),
+            y_max=self._space.target.max(), # notice here is the difference
             bounds=self._space.bounds,
             random_state=self._random_state
         )
@@ -253,12 +272,19 @@ class BayesianOptimization(Observable):
         self.dispatch(Events.OPTIMIZATION_START)
         self._prime_queue(init_points)
         self.set_gp_params(**gp_params)
-
-        util = UtilityFunction(kind=acq,
+        if self.has_constraint:
+            util = UtilityFunctionConstraintWrapper(constraint_gp=self._gp_constraint,
+                               kind=acq,
                                kappa=kappa,
                                xi=xi,
                                kappa_decay=kappa_decay,
                                kappa_decay_delay=kappa_decay_delay)
+        else:
+            util = UtilityFunction(kind=acq,
+                                kappa=kappa,
+                                xi=xi,
+                                kappa_decay=kappa_decay,
+                                kappa_decay_delay=kappa_decay_delay)
         iteration = 0
         while not self._queue.empty or iteration < n_iter:
             try:
