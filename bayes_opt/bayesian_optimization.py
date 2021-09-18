@@ -196,7 +196,7 @@ class BayesianOptimization(Observable):
             warnings.simplefilter("ignore")
             self._gp.fit(self._space.params, self._space.target)
             if self.has_constraint:
-                self._gp_constraint.fit(self._space.params, self._space._constaint_target)
+                self._gp_constraint.fit(self._space.params, self._space._constraint_target)
         # Finding argmax of the acquisition function.
         suggestion = acq_max(
             ac=utility_function.utility,

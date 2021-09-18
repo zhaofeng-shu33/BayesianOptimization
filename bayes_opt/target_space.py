@@ -53,7 +53,7 @@ class TargetSpace(object):
         self._params = np.empty(shape=(0, self.dim))
         self.has_constraint = has_constraint
         if has_constraint:
-            self._constaint_target = np.empty(shape=(0)) 
+            self._constraint_target = np.empty(shape=(0)) 
         self._target = np.empty(shape=(0))
 
         # keep track of unique points we have seen so far
@@ -169,7 +169,7 @@ class TargetSpace(object):
         self._params = np.concatenate([self._params, x.reshape(1, -1)])
         if self.has_constraint:
             self._target = np.concatenate([self._target, [target[0]]])
-            self._constaint_target = np.concatenate([self._constaint_target, [target[1]]])
+            self._constraint_target = np.concatenate([self._constraint_target, [target[1]]])
         else:
             self._target = np.concatenate([self._target, [target]])
     def probe(self, params):
